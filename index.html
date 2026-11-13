@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Опрос</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <section class="info-container">
+        <h2>Информация об опросе</h2>
+        <p>Опрос полностью анонимный. Отвечайте достоверно, основываясь на личном опыте.</p>
+    </section>
+
+    <main class="quiz-container">
+        <section id="start-screen" class="screen">
+            <h1>Добро пожаловать на опрос!</h1>
+            <p>Ответьте на 5 простых вопросов.</p>
+            <button id="start-btn" class="btn" type="button">Начать</button>
+        </section>
+
+        <section id="quiz-screen" class="screen hidden">
+            <div class="progress-bar" aria-label="Прогресс опроса">
+                <div id="progress"></div>
+            </div>
+            <p id="question-count" class="question-count"></p>
+            <h2 id="question-text"></h2>
+            <div id="options-container" class="options-grid"></div>
+            <button id="next-btn" class="btn hidden" type="button">Далее</button>
+        </section>
+
+        <section id="review-screen" class="screen hidden">
+            <h1>Проверьте ваши ответы</h1>
+            <p>Если всё верно, нажмите кнопку «Завершить» для отправки.</p>
+            <div id="summary"></div>
+            <button id="submit-btn" class="btn" type="button">Завершить</button>
+            <p id="error-message" class="error-message hidden" role="alert"></p>
+        </section>
+
+        <section id="result-screen" class="screen hidden">
+            <div class="thank-you-icon" aria-hidden="true">🎉</div>
+            <h1>Спасибо за прохождение!</h1>
+            <p>Ваши ответы успешно приняты и сохранены. Мы ценим ваше время и вклад в наше исследование.</p>
+        </section>
+    </main>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+        const SUPABASE_URL = 'https://qdavdmkspmsmrmgrqiyf.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_U-vJt5Y286IWvh53tNv_ZQ_38sKwkjS';
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const quizData = [
+            {
+                q: "Покупали ли вы когда-либо игры за реальные деньги?",
+                a: [
+                    "Да, покупаю регулярно",
+                    "Да, но покупаю редко / только на распродажах",
+                    "Раньше покупал(а), но сейчас перестал(а)",
+                    "Нет, никогда не покупал(а)"
+                ]
+            },
+            {
+                q: "Совершали ли вы внутриигровые покупки в бесплатных играх?",
+                a: [
+                    "Да, делаю это постоянно",
+                    "Да, делал(а) несколько раз",
+                    "Делал(а) только один раз ради интереса",
+                    "Нет, принципиально не трачу деньги в бесплатных играх"
+                ]
+            },
+            {
+                q: "Покупали ли вы когда-либо внутриигровые лутбоксы/кейсы?",
+                a: [
+                    "Да, покупаю их регулярно",
+                    "Да, покупал(а) пару раз",
+                    "Ни разу не покупал(а), но открывал(а) бесплатные",
+                    "Нет, никогда не покупал(а) и не открывал(а)"
+                ]
+            },
+            {
+                q: "Пользовались ли вы когда-либо платными сервисами случайного получения или улучшения цифровых товаров / внутриигровых предметов?",
+                a: [
+                    "Да, активно пользуюсь такими сайтами",
+                    "Да, пробовал(а) ради азарта / интереса",
+                    "Знаю про такие сервисы, но никогда не тратил(а) там деньги",
+                    "Нет, впервые слышу о таких сайтах"
+                ]
+            },
+            {
+                q: "Считаете ли вы оправданными потраченные деньги на платные игры/видеоигровые предметы?",
+                a: [
+                    "Да, полностью оправданы",
+                    "Скорее оправданы, если это хорошая игра или редкий скин",
+                    "Редко оправданы (часто жалею о таких тратах)",
+                    "Нет, абсолютно не оправданы"
+                ]
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        const userAnswers = [];
+
+        const startScreen = document.getElementById('start-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const reviewScreen = document.getElementById('review-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const startBtn = document.getElementById('start-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        const questionText = document.getElementById('question-text');
+        const questionCount = document.getElementById('question-count');
+        const optionsContainer = document.getElementById('options-container');
+        const progress = document.getElementById('progress');
+        const summary = document.getElementById('summary');
+        const errorMessage = document.getElementById('error-message');
+
+        startBtn.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            quizScreen.classList.remove('hidden');
+            showQuestion();
+        });
+
+        function showQuestion() {
+            nextBtn.classList.add('hidden');
+            optionsContainer.replaceChildren();
+
+            const question = quizData[currentQuestionIndex];
+            questionText.textContent = question.q;
+            questionCount.textContent =
+                `Вопрос ${currentQuestionIndex + 1} из ${quizData.length}`;
+
+            progress.style.width =
+                `${((currentQuestionIndex + 1) / quizData.length) * 100}%`;
+
+            question.a.forEach((answer) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'option-btn';
+                button.textContent = answer;
+
+                button.addEventListener('click', () => {
+                    optionsContainer.querySelectorAll('.option-btn')
+                        .forEach((item) => item.classList.remove('selected'));
+
+                    button.classList.add('selected');
+                    userAnswers[currentQuestionIndex] = answer;
+                    nextBtn.classList.remove('hidden');
+                });
+
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (userAnswers[currentQuestionIndex] === undefined) return;
+
+            currentQuestionIndex++;
+
+            if (currentQuestionIndex < quizData.length) {
+                showQuestion();
+            } else {
+                showReview();
+            }
+        });
+
+        function showReview() {
+            quizScreen.classList.add('hidden');
+            reviewScreen.classList.remove('hidden');
+            summary.replaceChildren();
+
+            quizData.forEach((item, index) => {
+                const paragraph = document.createElement('p');
+                const question = document.createElement('strong');
+                const answer = document.createElement('span');
+
+                question.textContent = item.q;
+                answer.className = 'user-ans';
+                answer.textContent = userAnswers[index];
+
+                paragraph.append(
+                    question,
+                    document.createElement('br'),
+                    'Ваш ответ: ',
+                    answer
+                );
+
+                summary.appendChild(paragraph);
+            });
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            errorMessage.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Отправка…';
+
+            const answers = quizData.map((item, index) => ({
+                question: item.q,
+                answer: userAnswers[index]
+            }));
+
+            try {
+                const { error } = await supabase
+                    .from('survey_responses')
+                    .insert({ answers });
+
+                if (error) throw error;
+
+                reviewScreen.classList.add('hidden');
+                resultScreen.classList.remove('hidden');
+            } catch (error) {
+                console.error('Ошибка отправки ответов:', error);
+                errorMessage.textContent =
+                    'Не удалось отправить ответы. Проверьте подключение и попробуйте ещё раз.';
+                errorMessage.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Завершить';
+            }
+        });
+    </script>
+</body>
+</html>
